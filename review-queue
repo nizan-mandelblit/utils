@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF2'
+review-queue - open PRs waiting on you, and your own open PRs
+
+Usage: review-queue
+
+Options:
+  -h, --help  show this help
+
+Environment:
+  ORG  GitHub org to search (default: Waving-ai)
+EOF2
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ?*) usage >&2; exit 1 ;;
+esac
+
+ORG="${ORG:-Waving-ai}"
+
+section() {
+  local title="$1" out
+  shift
+  out="$(gh search prs --owner "$ORG" --state open --limit 100 "$@" \
+    --json repository,number,title,url,isDraft,updatedAt \
+    --jq '.[] | "- \(.repository.name)#\(.number) \(.title)\(if .isDraft then " [draft]" else "" end) — \(.updatedAt[0:10]) \(.url)"')"
+  printf '\n## %s\n\n%s\n' "$title" "${out:-_none_}"
+}
+
+section "Waiting on my review" --review-requested @me
+section "My open PRs" --author @me
