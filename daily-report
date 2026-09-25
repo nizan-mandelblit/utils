@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+daily-report - your GitHub activity in an org, as markdown
+
+Usage: daily-report [DATE]
+
+DATE is any GitHub date qualifier (default: yesterday):
+  2026-09-22             a single day
+  2026-09-15..2026-09-22 a range
+  >=2026-09-15           since a day
+
+Options:
+  -h, --help  show this help
+
+Environment:
+  ORG  GitHub org to search (default: Waving-ai)
+
+Examples:
+  daily-report                              # yesterday
+  daily-report "$(date +%F)"                # today
+  daily-report "$(date -v-monday +%F)".."$(date +%F)"  # this week
+  ORG=some-other-org daily-report           # another org
+  daily-report | pbcopy                     # straight into a standup post
+EOF
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  -*) usage >&2; exit 1 ;;
+esac
+
+ORG="${ORG:-Waving-ai}"
+DAY="${1:-$(date -v-1d +%F)}"
+
+section() {
+  local title="$1" out
+  shift
+  out="$("$@")"
+  printf '\n## %s\n\n%s\n' "$title" "${out:-_none_}"
+}
+
+commits() {
+  gh search commits --owner "$ORG" --author @me --author-date "$DAY" --limit 100 \
+    --json repository,sha,commit \
+    --jq '.[] | "- `\(.repository.name)@\(.sha[0:7])` \(.commit.message | split("\n")[0])"'
+}
+
+prs() {
+  gh search prs --owner "$ORG" --limit 100 "$@" --json repository,number,title,state \
+    --jq '.[] | "- [\(.state)] \(.repository.name)#\(.number) \(.title)"'
+}
+
+printf '# Daily report — %s\n' "$DAY"
+section Commits commits
+section "PRs opened" prs --author @me --created "$DAY"
+section "PRs merged" prs --author @me --merged-at "$DAY"
+section "PRs reviewed" prs --reviewed-by @me --updated "$DAY"
