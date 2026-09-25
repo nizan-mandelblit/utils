@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF2'
+git-gone - list local branches whose remote branch is gone (merged PRs)
+
+Usage: git gone [-d|--delete]
+
+Options:
+  -d, --delete  delete them (git branch -D)
+  -h, --help    show this help
+EOF2
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  -d|--delete) delete=1 ;;
+  "") delete=0 ;;
+  *) usage >&2; exit 1 ;;
+esac
+
+git fetch --prune --quiet
+git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads |
+  awk '$2 == "[gone]" { print $1 }' |
+  while read -r branch; do
+    if ((delete)); then git branch -D "$branch"; else echo "$branch"; fi
+  done
